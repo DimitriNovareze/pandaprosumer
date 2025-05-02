@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from pandaprosumer.controller.base import BasicProsumerController
-
+from pandaprosumer.mapping import FluidMixMapping
 logging.basicConfig(level=logging.WARNING)
 
 
@@ -43,26 +43,26 @@ class BoosterHeatPumpController(BasicProsumerController):
     def _mode(self):
         return self._get_input("mode")
 
-    @property
-    def _q_received_kw(self):
-        return self._get_input("q_received_kw")
+    # @property
+    # def _q_received_kw(self):
+    #     return self._get_input("q_received_kw")
 
     @property
     def _p_received_kw(self):
         return self._get_input("p_received_kw")
 
-    def q_to_receive_kw(self, prosumer):
-        """
-        Calculates the heat to receive in kW.
-
-        :param prosumer: The prosumer object
-        :return: Heat to receive in kW
-        """
-        self.applied = False
-        q_to_receive_kw = 0.
-        for responder in self._get_generic_mapped_responders(prosumer):
-            q_to_receive_kw += responder.q_to_receive_kw(prosumer)
-        return q_to_receive_kw
+    # def q_to_receive_kw(self, prosumer):
+    #     """
+    #     Calculates the heat to receive in kW.
+    #
+    #     :param prosumer: The prosumer object
+    #     :return: Heat to receive in kW
+    #     """
+    #     self.applied = False
+    #     q_to_receive_kw = 0.
+    #     for responder in self._get_generic_mapped_responders(prosumer):
+    #         q_to_receive_kw += responder.q_to_receive_kw(prosumer)
+    #     return q_to_receive_kw
 
     def p_to_receive_kw(self, prosumer):
         """
@@ -77,17 +77,17 @@ class BoosterHeatPumpController(BasicProsumerController):
             p_to_receive_kw += responder.p_to_receive_kw(prosumer)
         return p_to_receive_kw
 
-    def q_requested_kw(self, prosumer):
-        """
-        Calculates the heat to deliver in kW.
-
-        :param prosumer: The prosumer object
-        :return: Heat to deliver in kW
-        """
-        q_to_deliver_kw = 0.
-        for responder in self._get_generic_mapped_responders(prosumer):
-            q_to_deliver_kw += responder.q_to_receive_kw(prosumer)
-        return q_to_deliver_kw
+    # def q_requested_kw(self, prosumer):
+    #     """
+    #     Calculates the heat to deliver in kW.
+    #
+    #     :param prosumer: The prosumer object
+    #     :return: Heat to deliver in kW
+    #     """
+    #     q_to_deliver_kw = 0.
+    #     for responder in self._get_generic_mapped_responders(prosumer):
+    #         q_to_deliver_kw += responder.q_to_receive_kw(prosumer)
+    #     return q_to_deliver_kw
 
     def control_step(self, prosumer):
         """
@@ -96,9 +96,21 @@ class BoosterHeatPumpController(BasicProsumerController):
         :param prosumer: The prosumer object
         """
         super().control_step(prosumer)
-        demand_kw = self.q_requested_kw(prosumer)
+
+
+        if not self._are_initiators_converged(prosumer):
+            # If some of the initiators are not converged, do not run the control step
+            self._unapply_initiators(prosumer)
+            self.input_mass_flow_with_temp = {FluidMixMapping.TEMPERATURE_KEY: np.nan,
+                                              FluidMixMapping.MASS_FLOW_KEY: np.nan}
+            return
+
+        t_demand_out_c, t_demand_in_c, mdot_demand_tab_kg_per_s = self.t_m_to_deliver(prosumer)
+        mdot_demand_kg_per_s = sum(mdot_demand_tab_kg_per_s)
+        demand_kw = mdot_demand_kg_per_s * 4.186 * (t_demand_out_c - t_demand_in_c)  # self.q_requested_kw(prosumer)
         p_el_kw = self._p_received_kw
-        q_kw = self._q_received_kw
+        q_kw = self.input_mass_flow_with_temp[FluidMixMapping.MASS_FLOW_KEY] * 4.186 * (
+                    t_demand_out_c - t_demand_in_c)  # self._q_received_kw
         t_source_k = self._t_source
         hp_type = self._get_element_param(prosumer, "hp_type")
         mode = self._mode
@@ -256,18 +268,33 @@ class BoosterHeatPumpController(BasicProsumerController):
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
-        result = np.array([pd.Series(cop_floor),
-                  pd.Series(cop_radiator),
-                  pd.Series(pel_floor_kw),
-                  pd.Series(pel_radiator_kw),
-                  pd.Series(q_remain_kw),
-                  pd.Series(q_floor_kw),
-                  pd.Series(q_radiator_kw)
-                  ])
+        mdot_delivered_kg_per_s = mdot_demand_kg_per_s
 
-        self.finalize(prosumer, result.T)
+
+        result_mdot_tab_kg_per_s = self._merit_order_mass_flow(prosumer,
+                                                               mdot_delivered_kg_per_s,
+                                                               mdot_demand_tab_kg_per_s)
+
+        result = np.array([pd.Series(cop_floor),
+                           pd.Series(cop_radiator),
+                           pd.Series(pel_floor_kw),
+                           pd.Series(pel_radiator_kw),
+                           pd.Series(q_remain_kw),
+                           pd.Series(q_floor_kw),
+                           pd.Series(q_radiator_kw)
+                           ])
+
+        result_fluid_mix = []
+        for mdot_kg_per_s in result_mdot_tab_kg_per_s:
+            result_fluid_mix.append({
+                FluidMixMapping.TEMPERATURE_KEY: t_demand_out_c,
+                FluidMixMapping.MASS_FLOW_KEY: mdot_kg_per_s
+            })
+
+        self.finalize(prosumer, result.T, result_fluid_mix)
 
         self.applied = True
+
 
     def first_mode_calc(self, q_kw, demand_kw, p_el_kw, q_max_kw,
                         t_sink_floor_heating_k, t_sink_radiator_heating_k, t_source_k, cop_coeff):
