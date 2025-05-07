@@ -672,6 +672,22 @@ def create_heat_storage(prosumer,
     _set_entries(prosumer, "heat_storage", index, **entries, **kwargs)
     return int(index)
 
+def create_uniform_heat_storage(prosumer,
+                        q_capacity_kwh=0.,
+                        in_service=True,
+                        index=None,
+                        name=None,
+                        **kwargs):
+
+    add_new_element(prosumer, UniformHeatStorageElementData)
+
+    index = _get_index_with_check(prosumer, "uniform_heat_storage", index)
+
+    entries = dict(zip(['name', 'q_capacity_kwh', 'in_service'], [name, q_capacity_kwh, in_service]))
+
+    _set_entries(prosumer, "uniform_heat_storage", index, **entries, **kwargs)
+    return int(index)
+
 def create_chiller(
         prosumer,
         cp_water=4.18,

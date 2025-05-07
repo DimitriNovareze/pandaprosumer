@@ -9,4 +9,4 @@ from .dry_cooler import *
 from .electric_boiler import *
 from .gas_boiler import *
 from .chiller import*
-
+from .uniform_heat_storage import *
