@@ -242,7 +242,7 @@ class HeatPumpController(BasicProsumerController):
             return
 
         t_cond_out_required_c, t_cond_in_required_c, mdot_tab_required_kg_per_s = self.t_m_to_deliver(prosumer)
-        print(t_cond_out_required_c, t_cond_in_required_c, mdot_tab_required_kg_per_s)
+
         mdot_cond_required_kg_per_s = np.sum(mdot_tab_required_kg_per_s)
 
         assert not np.isnan(mdot_cond_required_kg_per_s), f"Heat Pump {self.name} mdot_cond_required_kg_per_s is NaN for timestep {self.time} in prosumer {prosumer.name}"
@@ -299,6 +299,7 @@ class HeatPumpController(BasicProsumerController):
 
             rerun = False
             if len(self._get_mapped_responders(prosumer)) > 1 and mdot_cond_kg_per_s < mdot_cond_required_kg_per_s:
+
                 # FixMe: Can't test this case in a single model test without mapping (no responders)
                 # If the heat Pump is not able to deliver the required mass flow,
                 # recalculate the condenser input temperature, considering that all the downstream elements will be

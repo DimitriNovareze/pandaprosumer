@@ -25,7 +25,7 @@ def _calculate_electric_boiler_temp(mdot_kg_per_s, t_out_c, t_in_c, cp_fluid_kj_
         p_el_consumed_kw = max_p_kw
         q_fluid_kw = max_p_kw * (efficiency_percent / 100)
         # FixMe: Should update the output temperature or the mass flow rate ?
-        t_out_c = t_in_c + q_fluid_kw / (mdot_kg_per_s * cp_fluid_kj_per_kgk)
+        mdot_kg_per_s = q_fluid_kw / (cp_fluid_kj_per_kgk * (t_out_c - t_in_c))
 
     return q_fluid_kw, mdot_kg_per_s, t_in_c, t_out_c, p_el_consumed_kw
 
@@ -96,7 +96,7 @@ class ElectricBoilerController(BasicProsumerController):
 
         t_out_required_c, t_in_required_c, mdot_tab_required_kg_per_s = self.t_m_to_deliver(prosumer)
         mdot_required_kg_per_s = np.sum(mdot_tab_required_kg_per_s)
-
+        print(mdot_required_kg_per_s)
         assert not np.isnan(t_out_required_c), f"Electric Boiler {self.name} t_out_required_c is NaN for timestep {self.time} in prosumer {prosumer.name}"
         assert not np.isnan(t_in_required_c), f"Electric Boiler {self.name} t_in_required_c is NaN for timestep {self.time} in prosumer {prosumer.name}"
         assert not np.isnan(mdot_required_kg_per_s).any(), f"Electric Boiler {self.name} mdot_required_kg_per_s is NaN for timestep {self.time} in prosumer {prosumer.name}"
@@ -141,6 +141,7 @@ class ElectricBoilerController(BasicProsumerController):
                                      FluidMixMapping.MASS_FLOW_KEY: mdot_kg_per_s})
 
         result = np.array([[q_kw, mdot_delivered_kg_per_s, t_in_c, t_out_c, p_kw]])
+        print(mdot_delivered_kg_per_s)
 
         self.finalize(prosumer, result, result_fluid_mix)
 
