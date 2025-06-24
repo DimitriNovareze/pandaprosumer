@@ -62,8 +62,9 @@ class GasBoilerController(BasicProsumerController):
             mdot_gas_kg_per_s = max_q_kw / heating_value_kj_per_kg
 
             q_fluid_kw = max_q_kw
-            # FixMe: Should update the output temperature or the mass flow rate ?
+
             mdot_kg_per_s = q_fluid_kw / (cp_fluid_kj_per_kgk * (t_out_c - t_in_c))
+
         return q_fluid_kw, mdot_kg_per_s, t_in_c, t_out_c, mdot_gas_kg_per_s
 
     def control_step(self, prosumer):
